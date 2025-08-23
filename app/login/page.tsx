@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { redirect } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function Login() {
   const [form, setForm] = useState({
@@ -9,13 +10,36 @@ export default function Login() {
     password: "",
   });
 
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      redirect("/home");
+    }
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Add login logic here
+
+    const res = await fetch(`${process.env.API_URL || "http://localhost:8080/api"}/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(form),
+    });
+
+    const data = await res.json();
+    localStorage.setItem("token", data.token);
+
+    if (res.ok) {
+      redirect("/home");
+    } else {
+      alert("Login failed. Please check your credentials.");
+    }
   };
 
   return (

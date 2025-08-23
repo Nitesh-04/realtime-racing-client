@@ -1,22 +1,58 @@
 "use client";
 
-import { useState } from "react";
+import { redirect } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function Signup() {
   const [form, setForm] = useState({
     email: "",
+    name: "",
     username: "",
     password: "",
     confirmPassword: "",
   });
 
+  useEffect(() => {
+      const token = localStorage.getItem("token");
+      if (token) {
+        redirect("/home");
+      }
+    }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Add signup logic here
+    
+    const { name, username, email, password, confirmPassword } = form;
+
+    if (password !== confirmPassword) {
+      alert("Passwords do not match");
+      return;
+    }
+
+    const res = await fetch(`${process.env.API_URL || "http://localhost:8080/api"}/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name,
+        username,
+        email,
+        password,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      redirect("/login");
+    } else {
+      alert(data.error);
+    }
   };
 
   return (
@@ -27,10 +63,10 @@ export default function Signup() {
       >
         <h1 className="text-2xl font-bold text-[#e2b714] mb-6 text-center">Sign Up</h1>
         <input
-          type="email"
-          name="email"
-          placeholder="Email"
-          value={form.email}
+          type="text"
+          name="name"
+          placeholder="Name"
+          value={form.name}
           onChange={handleChange}
           className="w-full mb-4 px-4 py-2 rounded bg-[#323437] text-[#d1d0c5] border border-[#e2b714] focus:outline-none"
           required
@@ -40,6 +76,15 @@ export default function Signup() {
           name="username"
           placeholder="Username"
           value={form.username}
+          onChange={handleChange}
+          className="w-full mb-4 px-4 py-2 rounded bg-[#323437] text-[#d1d0c5] border border-[#e2b714] focus:outline-none"
+          required
+        />
+        <input
+          type="email"
+          name="email"
+          placeholder="Email"
+          value={form.email}
           onChange={handleChange}
           className="w-full mb-4 px-4 py-2 rounded bg-[#323437] text-[#d1d0c5] border border-[#e2b714] focus:outline-none"
           required
