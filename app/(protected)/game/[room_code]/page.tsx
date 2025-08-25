@@ -120,7 +120,7 @@ export default function Game() {
     const token = localStorage.getItem("token");
     const fetchPrompt = async () => {
       try {
-        const res = await fetch(`${process.env.API_URL || "http://localhost:8080/api"}/race/${room_code}`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/race/${room_code}`, {
           headers: {
             Authorization: `Bearer ${token}`
           }

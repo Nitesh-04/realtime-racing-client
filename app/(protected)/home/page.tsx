@@ -41,7 +41,7 @@ export default function HomeStats() {
     }
 
     const fetchUser = async () => {
-      const userRes = await fetch(`${process.env.API_URL || "http://localhost:8080/api"}/me`, {
+      const userRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -58,7 +58,7 @@ export default function HomeStats() {
     };
 
     const fetchData = async () => {
-      const dataRes = await fetch(`${process.env.API_URL || "http://localhost:8080/api"}/user/stats`, {
+      const dataRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/user/stats`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -88,7 +88,7 @@ export default function HomeStats() {
       return;
     }
 
-    const roomRes = await fetch(`${process.env.API_URL || "http://localhost:8080/api"}/race/create`, {
+    const roomRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/race/create`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -113,7 +113,7 @@ export default function HomeStats() {
       return;
     }
 
-    const roomRes = await fetch(`${process.env.API_URL || "http://localhost:8080/api"}/race/join/${code}`, {
+    const roomRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/race/join/${code}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
