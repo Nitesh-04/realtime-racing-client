@@ -10,6 +10,8 @@ export default function Login() {
     password: "",
   });
 
+  const [loading, setLoading] = useState(false);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -25,6 +27,8 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    setLoading(true);
 
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL|| "http://localhost:8080/api"}/login`, {
       method: 'POST',
@@ -42,6 +46,8 @@ export default function Login() {
     } else {
       alert("Login failed. Please check your credentials.");
     }
+
+    setLoading(false);
   };
 
   return (
@@ -74,6 +80,7 @@ export default function Login() {
         </p>
         <button
           type="submit"
+          disabled={loading}
           className="w-full py-2 rounded bg-[#e2b714] text-[#171717] font-semibold hover:bg-[#fff176] transition"
         >
           Login

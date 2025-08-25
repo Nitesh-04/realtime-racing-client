@@ -12,6 +12,8 @@ export default function Signup() {
     confirmPassword: "",
   });
 
+  const [loading, setLoading] = useState(false);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -35,6 +37,8 @@ export default function Signup() {
       return;
     }
 
+    setLoading(true);
+
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/register`, {
       method: 'POST',
       headers: {
@@ -55,6 +59,8 @@ export default function Signup() {
     } else {
       alert(data.error);
     }
+
+    setLoading(false);
   };
 
   return (
@@ -111,6 +117,7 @@ export default function Signup() {
         />
         <button
           type="submit"
+          disabled={loading}
           className="w-full py-2 rounded bg-[#e2b714] text-[#171717] font-semibold hover:bg-[#fff176] transition"
         >
           Sign Up

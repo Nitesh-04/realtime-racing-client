@@ -29,6 +29,8 @@ export default function HomeStats() {
     const [username, setUsername] = useState("");
     const [joined, setJoined] = useState("");
 
+    const [loading, setLoading] = useState(false);
+
     const [userCode, setUserCode] = useState("");
     const [showJoinModal, setShowJoinModal] = useState(false);
     const [enteredRoomCode, setEnteredRoomCode] = useState(Array(6).fill(""));
@@ -113,6 +115,8 @@ export default function HomeStats() {
       return;
     }
 
+    setLoading(true);
+
     const roomRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/race/join/${code}`, {
       method: "POST",
       headers: {
@@ -128,6 +132,8 @@ export default function HomeStats() {
     } else {
       alert(roomData.error);
     }
+
+    setLoading(false);
 
     console.log(code);
   }
@@ -229,6 +235,7 @@ export default function HomeStats() {
                 Cancel
               </button>
               <button
+                disabled={loading}
                 onClick={() => {
                   const code = enteredRoomCode.join("");
                   setUserCode(code);
