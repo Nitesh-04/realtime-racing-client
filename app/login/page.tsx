@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function Login() {
@@ -10,10 +10,12 @@ export default function Login() {
     password: "",
   });
 
+  const router = useRouter();
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
-      redirect("/home");
+      router.push("/home");
     }
   }, []);
 
@@ -36,7 +38,7 @@ export default function Login() {
     localStorage.setItem("token", data.token);
 
     if (res.ok) {
-      redirect("/home");
+      router.push("/home");
     } else {
       alert("Login failed. Please check your credentials.");
     }

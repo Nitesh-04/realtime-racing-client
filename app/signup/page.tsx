@@ -1,6 +1,6 @@
 "use client";
 
-import { redirect } from "next/navigation";
+import { useRouter} from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function Signup() {
@@ -12,10 +12,12 @@ export default function Signup() {
     confirmPassword: "",
   });
 
+  const router = useRouter();
+
   useEffect(() => {
       const token = localStorage.getItem("token");
       if (token) {
-        redirect("/home");
+        router.push("/home");
       }
     }, []);
 
@@ -49,7 +51,7 @@ export default function Signup() {
     const data = await res.json();
 
     if (res.ok) {
-      redirect("/login");
+      router.push("/login");
     } else {
       alert(data.error);
     }

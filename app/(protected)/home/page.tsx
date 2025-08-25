@@ -1,6 +1,6 @@
 "use client";
 
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const dummyStats = {
@@ -18,6 +18,8 @@ const dummyStats = {
 
 export default function HomeStats() {
 
+    const router = useRouter();
+
     const [avgWpm, setAvgWpm] = useState(0.0);
     const [avgAccuracy, setAvgAccuracy] = useState(0.0);
     const [avgError, setAvgError] = useState(0.0);
@@ -27,10 +29,14 @@ export default function HomeStats() {
     const [username, setUsername] = useState("");
     const [joined, setJoined] = useState("");
 
+    const [userCode, setUserCode] = useState("");
+    const [showJoinModal, setShowJoinModal] = useState(false);
+    const [enteredRoomCode, setEnteredRoomCode] = useState(Array(6).fill(""));
+
   useEffect(() => {
     const token =  localStorage.getItem("token");
     if (!token) {
-      redirect("/login");
+      router.push("/login");
       return;
     }
 
@@ -44,6 +50,7 @@ export default function HomeStats() {
       if (userRes.ok) {
         const userData = await userRes.json();
         setUsername(userData.user.username);
+        localStorage.setItem("username", userData.user.username);
         setJoined(new Date(userData.user.created_at).toLocaleDateString());
       } else {
         alert("Failed to fetch user data");
@@ -73,6 +80,57 @@ export default function HomeStats() {
     fetchUser();
     fetchData();
   }, []);
+
+  async function createRoom() {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    const roomRes = await fetch(`${process.env.API_URL || "http://localhost:8080/api"}/race/create`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const roomData = await roomRes.json();
+
+    if (roomRes.ok) {
+      console.log("here");
+      console.log("Room created:", roomData.room);
+      router.push(`/race/${roomData.room.room_code}`);
+    } else {
+      alert(roomData.error);
+    }
+  }
+
+  async function joinRoom(code: string) {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    const roomRes = await fetch(`${process.env.API_URL || "http://localhost:8080/api"}/race/join/${code}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const roomData = await roomRes.json();
+
+    if (roomRes.ok) {
+      console.log("Room joined:", roomData.room);
+      router.push(`/race/${roomData.room.room_code}`);
+    } else {
+      alert(roomData.error);
+    }
+
+    console.log(code);
+  }
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-[#23242a] font-mono text-[#d1d0c5] px-4">
@@ -130,11 +188,60 @@ export default function HomeStats() {
             </div>
           </div>
           <div className="flex flex-col gap-6 items-center justify-center w-full">
-            <button className="w-full py-3 rounded bg-[#e2b714] text-[#171717] font-semibold text-xl hover:bg-[#fff176] transition shadow-lg">Create Room</button>
-            <button className="w-full py-3 rounded bg-[#23242a] text-[#e2b714] border border-[#e2b714] font-semibold text-xl hover:bg-[#e2b714] hover:text-[#171717] transition shadow-lg">Join Room</button>
+            <button className="w-full py-3 rounded bg-[#e2b714] text-[#171717] font-semibold text-xl hover:bg-[#fff176] transition shadow-lg" onClick={createRoom}>Create Room</button>
+            <button className="w-full py-3 rounded bg-[#23242a] text-[#e2b714] border border-[#e2b714] font-semibold text-xl hover:bg-[#e2b714] hover:text-[#171717] transition shadow-lg" onClick={() => setShowJoinModal(true)}>Join Room</button>
           </div>
         </div>
       </div>
+      {showJoinModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-20 z-50">
+          <div className="bg-[#171717] p-8 rounded-xl shadow-lg flex flex-col gap-6 w-[90%] max-w-md">
+            <h2 className="text-2xl font-bold text-[#e2b714] text-center">
+              Enter Room Code
+            </h2>
+            <div className="flex justify-center gap-2">
+              {enteredRoomCode.map((digit, idx) => (
+                <input
+                  key={idx}
+                  type="text"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => {
+                    const newCode = [...enteredRoomCode];
+                    newCode[idx] = e.target.value.replace(/[^0-9]/g, ""); // only numbers
+                    setEnteredRoomCode(newCode);
+
+                    if (e.target.value && idx < 5) {
+                      const next = document.getElementById(`otp-${idx + 1}`);
+                      if (next) next.focus();
+                    }
+                  }}
+                  id={`otp-${idx}`}
+                  className="w-12 h-12 text-center text-xl font-bold rounded-md bg-[#23242a] text-[#e2b714] border border-[#e2b714] focus:outline-none focus:ring-2 focus:ring-[#e2b714]"
+                />
+              ))}
+            </div>
+            <div className="flex justify-between mt-6">
+              <button
+                onClick={() => setShowJoinModal(false)}
+                className="px-4 py-2 bg-[#23242a] border border-[#e2b714] text-[#e2b714] rounded-lg hover:bg-[#e2b714] hover:text-[#171717] transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const code = enteredRoomCode.join("");
+                  setUserCode(code);
+                  joinRoom(code);
+                }}
+                className="px-4 py-2 bg-[#e2b714] text-[#171717] font-semibold rounded-lg hover:bg-[#fff176] transition"
+              >
+                Join
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
