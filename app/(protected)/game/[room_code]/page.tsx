@@ -17,18 +17,6 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-const WORDS = [
-  "the", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog", "monkey", "type", "race", "speed", "accuracy", "keyboard", "challenge", "winner", "loser", "game", "play"
-];
-
-function getWords(count: number) {
-  const arr = [];
-  for (let i = 0; i < count; i++) {
-    arr.push(WORDS[Math.floor(Math.random() * WORDS.length)]);
-  }
-  return arr;
-}
-
 interface PlayerStats {
   wpm: number;
   accuracy: number;
@@ -47,8 +35,6 @@ export default function Game() {
   const { connect, disconnect, connected, error } = useWebSocketConnect();
   const connectionInitialized = useRef(false);
 
-  const [countdown, setCountdown] = useState<number | null>(null);
-
   // Game state
   const [words, setWords] = useState<string[] | null>(null);
   const [prompt, setPrompt] = useState<string | null>(null);
@@ -57,6 +43,7 @@ export default function Game() {
   const [started, setStarted] = useState(false);
   const [finished, setFinished] = useState(false);
   const [timer, setTimer] = useState(15);
+  const [gameStartTime, setGameStartTime] = useState<Date | null>(null);
   const [wpm, setWpm] = useState(0);
   const [liveWpm, setLiveWpm] = useState(0);
   const [accuracy, setAccuracy] = useState(0);
@@ -70,7 +57,9 @@ export default function Game() {
   const [opponentStats, setOpponentStats] = useState<Record<string, PlayerStats>>({});
   const [gameOver, setGameOver] = useState<GameOverData | null>(null);
   const [username, setUsername] = useState<string>("");
-  const [waitingForStart, setWaitingForStart] = useState(true);
+  
+  // Remove waitingForStart - game should start immediately when this component loads
+  const [gameActive, setGameActive] = useState(false);
 
   useEffect(() => {
     if (!room_code || connectionInitialized.current) return;
@@ -86,21 +75,24 @@ export default function Game() {
     };
   }, [room_code, connect, disconnect]);
 
+  // Handle player list updates
   useWebSocketMessage("player_list", (payload: string[]) => {
+    console.log("Game: Received player_list:", payload);
     setPlayers(payload);
   });
 
+  // When we receive start message, begin the game immediately
+  // Handle countdown messages (should not happen in game component, but just in case)
   useWebSocketMessage("countdown", (payload: { seconds: number }) => {
-    console.log("Countdown:", payload.seconds);
-    setCountdown(payload.seconds);
+    console.warn("Game: Received unexpected countdown message:", payload.seconds);
+    // If we receive countdown in game component, something went wrong
+    // We should already be past the countdown phase
   });
 
   useWebSocketMessage("start", () => {
-    console.log("Game starting!");
-    setWaitingForStart(false);
-    if (words === null) {
-      setWords(getWords(30));
-    }
+    console.log("Game: Received start signal - beginning race immediately!");
+    setGameActive(true);
+    setGameStartTime(new Date());
   });
 
   useWebSocketMessage("stats_update", (payload: Record<string, PlayerStats>) => {
@@ -111,9 +103,8 @@ export default function Game() {
     console.log("Game over!", payload);
     setGameOver(payload);
     setFinished(true);
-    setWaitingForStart(false);
+    setGameActive(false);
   });
-
 
   useEffect(() => {
     if (!room_code) return;
@@ -139,53 +130,83 @@ export default function Game() {
     fetchPrompt();
   }, [room_code]);
 
-  // Game timer
+  // Game timer - only start when game actually starts
   useEffect(() => {
-    if (started && !finished && timer > 0) {
-      const interval = setInterval(() => {
-        setTimer((t) => t - 1);
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-    if (timer === 0 && started && !finished) {
-      finishGame();
-    }
-  }, [started, timer, finished]);
+    if (!gameStartTime || finished || !gameActive) return;
+    
+    const interval = setInterval(() => {
+      const elapsedSeconds = Math.floor((Date.now() - gameStartTime.getTime()) / 1000);
+      const remainingTime = Math.max(0, 15 - elapsedSeconds);
+      setTimer(remainingTime);
+      
+      if (remainingTime === 0 && !finished) {
+        finishGame();
+      }
+    }, 100);
+    
+    return () => clearInterval(interval);
+  }, [gameStartTime, finished, gameActive]);
 
-  // Live WPM calculation and broadcasting
+  // Consistent WPM calculation
+  const calculateWPM = () => {
+    if (!gameStartTime || !words) return 0;
+    
+    const prompt = words.join(' ');
+    const elapsedMinutes = (Date.now() - gameStartTime.getTime()) / 60000;
+    
+    if (elapsedMinutes <= 0) return 0;
+    
+    const correctCharsTyped = input.split('').filter((char, index) => 
+      char === prompt[index] && char !== ' '
+    ).length;
+    
+    return Math.round(correctCharsTyped / 5 / elapsedMinutes);
+  };
+
+  const calculateAccuracy = () => {
+    if (totalChars === 0) return 100;
+    return Math.round((correctChars / totalChars) * 100);
+  };
+
+  // Live stats update and broadcasting
   useEffect(() => {
-    if (!started || finished || !connected) return;
+    if (!gameStartTime || finished || !connected || !gameActive) return;
     
-    const prompt = words ? words.join(' ') : '';
-    const correctCharsCount = input.split('').filter((c, i) => c === prompt[i] && c !== ' ').length;
-    const elapsed = 15 - timer;
-    const wpmNow = elapsed > 0 ? Math.round((correctCharsCount / 5) / (elapsed / 60)) : 0;
-    const currentAccuracy = totalChars === 0 ? 100 : Math.round((correctChars / totalChars) * 100);
+    const currentWpm = calculateWPM();
+    const currentAccuracy = calculateAccuracy();
     
-    setLiveWpm(wpmNow);
+    setLiveWpm(currentWpm);
 
-    // Broadcast stats to other players
-    const stats: PlayerStats = {
-      wpm: wpmNow,
-      accuracy: currentAccuracy,
-      error: errors
+    const broadcastStats = () => {
+      const stats: PlayerStats = {
+        wpm: currentWpm,
+        accuracy: currentAccuracy,
+        error: errors
+      };
+
+      if (window.wsConnection && window.wsConnection.readyState === WebSocket.OPEN) {
+        window.wsConnection.send(JSON.stringify({
+          type: "stats_update",
+          payload: stats
+        }));
+      }
     };
 
-    if (window.wsConnection && window.wsConnection.readyState === WebSocket.OPEN) {
-      window.wsConnection.send(JSON.stringify({
-        type: "stats_update",
-        payload: stats
-      }));
-    }
-  }, [input, timer, started, finished, connected, correctChars, totalChars, errors, words]);
+    const interval = setInterval(broadcastStats, 500);
+    return () => clearInterval(interval);
+  }, [input, gameStartTime, finished, connected, correctChars, totalChars, errors, gameActive]);
 
   // Game input handling
   useEffect(() => {
-    if (!words || waitingForStart) return;
+    if (!words || !gameActive || finished) return;
     
     const handleKeyDown = (e: KeyboardEvent) => {
       if (finished || timer === 0) return;
-      if (!started) setStarted(true);
+      
+      // Start the game on first keystroke
+      if (!started) {
+        setStarted(true);
+      }
       
       const prompt = words.join(" ");
       
@@ -194,16 +215,13 @@ export default function Game() {
           setInput((prev) => prev.slice(0, -1));
           setCurrentIdx((prev) => prev - 1);
           setTotalChars((prev) => prev - 1);
-          setCorrectChars((prev) => {
-            const idx = currentIdx - 1;
-            if (input[idx] === prompt[idx]) return prev - 1;
-            return prev;
-          });
-          setErrors((prev) => {
-            const idx = currentIdx - 1;
-            if (input[idx] !== prompt[idx]) return prev - 1;
-            return prev;
-          });
+          
+          const newIdx = currentIdx - 1;
+          if (input[newIdx] === prompt[newIdx]) {
+            setCorrectChars((prev) => prev - 1);
+          } else {
+            setErrors((prev) => prev - 1);
+          }
         }
         return;
       }
@@ -225,19 +243,14 @@ export default function Game() {
     
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [words, currentIdx, finished, timer, started, input, waitingForStart]);
+  }, [words, currentIdx, finished, timer, started, input, gameActive]);
 
   function finishGame() {
     setFinished(true);
-    let nonSpaceCorrect = 0;
-    if (words) {
-      const prompt = words.join(' ');
-      nonSpaceCorrect = input.split('').filter((c, i) => c === prompt[i] && c !== ' ').length;
-    }
-    const wpmCalc = Math.round((nonSpaceCorrect / 5) / (15 / 60));
-    setWpm(wpmCalc);
-    const acc = totalChars === 0 ? 100 : Math.round((correctChars / totalChars) * 100);
-    setAccuracy(acc);
+    const finalWpm = calculateWPM();
+    const finalAccuracy = calculateAccuracy();
+    setWpm(finalWpm);
+    setAccuracy(finalAccuracy);
   }
 
   function backToLobby() {
@@ -252,23 +265,16 @@ export default function Game() {
   const opponent = players.find(p => p !== username) || "Opponent";
   const opponentData = opponentStats[opponent] || { wpm: 0, accuracy: 0, error: 0 };
 
-  if (waitingForStart) {
+  // Show loading state while waiting for game to become active
+  if (!gameActive && !finished && !gameOver) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center bg-[#323437] font-mono text-[#d1d0c5]">
         <div className="text-center">
           <div className="text-4xl font-bold text-[#e2b714] mb-4">Get Ready!</div>
-          <div className="text-xl mb-8">Waiting for race to start...</div>
+          <div className="text-xl mb-8">Game is starting...</div>
           <div className="text-lg text-[#888888]">
-            Players in room: {players.join(", ")}
+            Players in room: {players.length > 0 ? players.join(", ") : "Loading..."}
           </div>
-          {countdown !== null && (
-          <div className="mt-4 text-center">
-            <p className="text-sm text-gray-600">Race starts in...</p>
-            <p className="text-2xl font-bold text-[#e2b714]">
-              {countdown}
-            </p>
-          </div>
-        )}
           {!connected && (
             <div className="text-yellow-600 mt-4">Connecting to game...</div>
           )}
@@ -304,7 +310,7 @@ export default function Game() {
               <div className="flex items-center gap-4">
                 <div className="text-[#e2b714] font-bold">{username}</div>
                 <div className="text-[#d1d0c5]">WPM: {liveWpm}</div>
-                <div className="text-[#d1d0c5]">Acc: {totalChars === 0 ? 100 : Math.round((correctChars / totalChars) * 100)}%</div>
+                <div className="text-[#d1d0c5]">Acc: {calculateAccuracy()}%</div>
                 <div className="text-[#ca4754]">Errors: {errors}</div>
               </div>
               <div className="flex items-center gap-4">
@@ -342,7 +348,7 @@ export default function Game() {
             {gameOver && (
               <div className="text-center mb-8">
                 <div className="text-4xl font-bold text-[#e2b714] mb-4">
-                  🏆 {gameOver.winner === username ? "You Won!" : `${gameOver.winner} Won!`}
+                  {gameOver.winner === username ? "You Won!" : `${gameOver.winner} Won!`}
                 </div>
                 {gameOver.reason && (
                   <div className="text-xl text-[#888888] mb-4">{gameOver.reason}</div>
@@ -373,10 +379,11 @@ export default function Game() {
                             const prompt = words ? words.join(' ') : '';
                             let wpmArr = [];
                             for (let sec = 1; sec <= 15; sec++) {
-                              const charsTyped = input.slice(0, Math.round((input.length / 15) * sec));
-                              const correctChars = charsTyped.split('').filter((c, i) => c === prompt[i] && c !== ' ').length;
-                              const wpmNow = sec > 0 ? Math.round((correctChars / 5) / (sec / 60)) : 0;
-                              wpmArr.push(wpmNow);
+                              const progressAtSec = Math.min(1, sec / 15);
+                              const charsAtSec = Math.floor(input.length * progressAtSec);
+                              const correctChars = input.slice(0, charsAtSec).split('').filter((c, i) => c === prompt[i] && c !== ' ').length;
+                              const wpmAtSec = correctChars / 5 / (sec / 60);
+                              wpmArr.push(Math.round(wpmAtSec));
                             }
                             return wpmArr;
                           })(),

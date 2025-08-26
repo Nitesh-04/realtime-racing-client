@@ -120,7 +120,7 @@ export default function Signup() {
           disabled={loading}
           className="w-full py-2 rounded bg-[#e2b714] text-[#171717] font-semibold hover:bg-[#fff176] transition"
         >
-          Sign Up
+          {loading ? "Signing up..." : "Sign Up"}
         </button>
       </form>
     </main>

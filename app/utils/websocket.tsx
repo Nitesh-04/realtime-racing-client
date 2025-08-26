@@ -59,7 +59,7 @@ export const wsManagerAtom = atom(
     let isManualClose = false;
 
     const connectWebSocket = () => {
-      const wsUrl = `wss://${process.env.NEXT_PUBLIC_WS_URL}/ws/${encodeURIComponent(room_code)}?username=${encodeURIComponent(username)}`;
+      const wsUrl = `wss://${process.env.NEXT_PUBLIC_WS_URL || "localhost:8080"}/ws/${encodeURIComponent(room_code)}?username=${encodeURIComponent(username)}`;
       console.log(`Connecting to: ${wsUrl}`);
       
       const ws = new WebSocket(wsUrl);

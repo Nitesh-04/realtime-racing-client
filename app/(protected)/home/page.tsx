@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -15,6 +17,7 @@ const dummyStats = {
   wpm15: 83,
   acc15: 100,
 };
+
 
 export default function HomeStats() {
 
@@ -83,6 +86,7 @@ export default function HomeStats() {
     fetchData();
   }, []);
 
+  
   async function createRoom() {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -90,25 +94,39 @@ export default function HomeStats() {
       return;
     }
 
-    const roomRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/race/create`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    setLoading(true);
+    
+    try {
+      const roomRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/race/create`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    const roomData = await roomRes.json();
+      const roomData = await roomRes.json();
 
-    if (roomRes.ok) {
-      console.log("here");
-      console.log("Room created:", roomData.room);
-      router.push(`/race/${roomData.room.room_code}`);
-    } else {
-      alert(roomData.error);
+      if (roomRes.ok && roomData.room && roomData.room.room_code) {
+        console.log("Room created:", roomData.room);
+        try {
+          router.push(`/race/${roomData.room.room_code}`);
+        } catch (navError) {
+          console.warn("Router.push failed, using window.location:", navError);
+          window.location.href = `/race/${roomData.room.room_code}`;
+        }
+      } else {
+        console.error("Room creation failed:", roomData);
+        alert(roomData.error || "Failed to create room");
+      }
+    } catch (error) {
+      console.error("Network error during room creation:", error);
+      alert("Network error. Please try again.");
+    } finally {
+      setLoading(false);
     }
   }
 
-  async function joinRoom(code: string) {
+  async function joinRoom(code : string) {
     const token = localStorage.getItem("token");
     if (!token) {
       router.push("/login");
@@ -116,26 +134,36 @@ export default function HomeStats() {
     }
 
     setLoading(true);
+    
+    try {
+      const roomRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/race/join/${code}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    const roomRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/race/join/${code}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+      const roomData = await roomRes.json();
 
-    const roomData = await roomRes.json();
-
-    if (roomRes.ok) {
-      console.log("Room joined:", roomData.room);
-      router.push(`/race/${roomData.room.room_code}`);
-    } else {
-      alert(roomData.error);
+      if (roomRes.ok && roomData.room && roomData.room.room_code) {
+        console.log("Room created:", roomData.room);
+        
+        try {
+          router.push(`/race/${code}`);
+        } catch (navError) {
+          console.warn("Router.push failed, using window.location:", navError);
+          window.location.href = `/race/${code}`;
+        }
+      } else {
+        console.error("Room creation failed:", roomData);
+        alert(roomData.error || "Failed to create room");
+      }
+    } catch (error) {
+      console.error("Network error during room creation:", error);
+      alert("Network error. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-
-    console.log(code);
   }
 
   return (
@@ -194,7 +222,7 @@ export default function HomeStats() {
             </div>
           </div>
           <div className="flex flex-col gap-6 items-center justify-center w-full">
-            <button className="w-full py-3 rounded bg-[#e2b714] text-[#171717] font-semibold text-xl hover:bg-[#fff176] transition shadow-lg" onClick={createRoom}>Create Room</button>
+            <button className="w-full py-3 rounded bg-[#e2b714] text-[#171717] font-semibold text-xl hover:bg-[#fff176] transition shadow-lg" onClick={createRoom}>{loading ? "Creating..." : "Create Room"}</button>
             <button className="w-full py-3 rounded bg-[#23242a] text-[#e2b714] border border-[#e2b714] font-semibold text-xl hover:bg-[#e2b714] hover:text-[#171717] transition shadow-lg" onClick={() => setShowJoinModal(true)}>Join Room</button>
           </div>
         </div>
@@ -243,7 +271,7 @@ export default function HomeStats() {
                 }}
                 className="px-4 py-2 bg-[#e2b714] text-[#171717] font-semibold rounded-lg hover:bg-[#fff176] transition"
               >
-                Join
+                {loading ? "Joining..." : "Join"}
               </button>
             </div>
           </div>
