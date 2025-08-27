@@ -13,6 +13,7 @@ export type PlayerStats = {
 declare global {
   interface Window {
     wsConnection: WebSocket | null;
+    wsConnectionKey: string | null;
   }
 }
 
@@ -38,15 +39,19 @@ export const wsManagerAtom = atom(
     const connectionKey = `${room_code}-${username}`;
     const currentKey = get(wsConnectionKeyAtom);
     
-    if (currentKey === connectionKey) {
-      console.log(`Connection already exists for ${connectionKey}`);
-      return;
+    // Check if we already have the same connection key
+    if (currentKey === connectionKey && window.wsConnection && window.wsConnection.readyState === WebSocket.OPEN) {
+      console.log(`Reusing existing WebSocket connection for ${connectionKey}`);
+      set(wsConnectionAtom, window.wsConnection);
+      set(wsConnectedAtom, true);
+      return window.wsConnection;
     }
     
     console.log(`Creating new WebSocket connection - room: ${room_code}, user: ${username}`);
     
+    // Close existing connection if it's different
     const existingWs = get(wsConnectionAtom);
-    if (existingWs && existingWs.readyState !== WebSocket.CLOSED) {
+    if (existingWs && existingWs.readyState !== WebSocket.CLOSED && currentKey !== connectionKey) {
       console.log("Closing existing WebSocket connection");
       existingWs.close(1000, "New connection requested");
     }
@@ -59,12 +64,13 @@ export const wsManagerAtom = atom(
     let isManualClose = false;
 
     const connectWebSocket = () => {
-      const wsUrl = `wss://${process.env.NEXT_PUBLIC_WS_URL || "localhost:8080"}/ws/${encodeURIComponent(room_code)}?username=${encodeURIComponent(username)}`;
+      const wsUrl = `ws://${process.env.NEXT_PUBLIC_WS_URL || "localhost:8080"}/ws/${encodeURIComponent(room_code)}?username=${encodeURIComponent(username)}`;
       console.log(`Connecting to: ${wsUrl}`);
       
       const ws = new WebSocket(wsUrl);
 
       window.wsConnection = ws;
+      window.wsConnectionKey = connectionKey;
 
       // Connection timeout
       const connectionTimeout = window.setTimeout(() => {
@@ -86,7 +92,11 @@ export const wsManagerAtom = atom(
       ws.onclose = (event) => {
         window.clearTimeout(connectionTimeout);
         set(wsConnectedAtom, false);
-        window.wsConnection = null;
+        
+        if (window.wsConnectionKey === connectionKey) {
+          window.wsConnection = null;
+          window.wsConnectionKey = null;
+        }
         
         if (isManualClose) {
           console.log("Manual close - not reconnecting");
@@ -115,15 +125,17 @@ export const wsManagerAtom = atom(
             set(wsErrorAtom, errorMessage);
         }
 
-        // Only attempt reconnection for certain error codes
-        if (event.code !== 1000 && event.code !== 1003 && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        // Only attempt reconnection for certain error codes and if still the active connection
+        if (event.code !== 1000 && event.code !== 1003 && reconnectAttempts < MAX_RECONNECT_ATTEMPTS && window.wsConnectionKey === connectionKey) {
           reconnectAttempts++;
           console.log(`Reconnecting... Attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
           reconnectTimeout = window.setTimeout(connectWebSocket, RECONNECT_DELAY);
         } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
           console.log("Max reconnection attempts reached");
           set(wsErrorAtom, "Failed to connect after multiple attempts");
-          set(wsConnectionKeyAtom, "");
+          if (window.wsConnectionKey === connectionKey) {
+            set(wsConnectionKeyAtom, "");
+          }
         }
       };
 
@@ -147,16 +159,19 @@ export const wsManagerAtom = atom(
 
     const ws = connectWebSocket();
 
-    // Cleanup function
     return () => {
-      console.log("🧹 Cleaning up WebSocket connection");
+      console.log("Cleaning up WebSocket connection");
       isManualClose = true;
       window.clearTimeout(reconnectTimeout);
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close(1000, "Component unmounted");
+      
+      if (window.wsConnectionKey === connectionKey) {
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close(1000, "Component unmounted");
+        }
+        window.wsConnection = null;
+        window.wsConnectionKey = null;
+        set(wsConnectionKeyAtom, "");
       }
-      window.wsConnection = null;
-      set(wsConnectionKeyAtom, "");
     };
   }
 );
@@ -197,22 +212,24 @@ export const useWebSocketConnect = () => {
   const [, setWs] = useAtom(wsManagerAtom);
   const [connected] = useAtom(wsConnectedAtom);
   const [error] = useAtom(wsErrorAtom);
-  const connectCalledRef = useRef(false);
+  const connectCalledRef = useRef<string>("");
 
   const connect = useCallback((room_code: string, username: string) => {
-    // Prevent multiple calls
-    if (connectCalledRef.current) {
-      console.log("Connect already called, ignoring duplicate");
+    const connectionKey = `${room_code}-${username}`;
+    
+    // Prevent multiple calls with same parameters
+    if (connectCalledRef.current === connectionKey) {
+      console.log(`Connect already called for ${connectionKey}, ignoring duplicate`);
       return;
     }
     
-    connectCalledRef.current = true;
+    connectCalledRef.current = connectionKey;
     console.log(`Initiating connection - room: ${room_code}, user: ${username}`);
     setWs(room_code, username);
   }, [setWs]);
 
   const disconnect = useCallback(() => {
-    connectCalledRef.current = false;
+    connectCalledRef.current = "";
   }, []);
 
   return { connect, disconnect, connected, error };

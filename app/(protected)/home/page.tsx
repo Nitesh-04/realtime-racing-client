@@ -196,7 +196,7 @@ export default function HomeStats() {
           <div className="flex flex-row gap-12 w-full md:w-2/3 justify-between">
           <div className="flex flex-col items-center">
               <span className="text-lg text-[#e2b714]">Avg WPM</span>
-              <span className="text-4xl font-bold text-[#e2b714]">{avgWpm}</span>
+              <span className="text-4xl font-bold text-[#e2b714]">{avgWpm.toFixed(2)}</span>
             </div>
             <div className="flex flex-col items-center">
               <span className="text-lg text-[#e2b714]">Total Races</span>
@@ -213,11 +213,11 @@ export default function HomeStats() {
             <div className="flex flex-row gap-12 w-full justify-center">
               <div className="flex flex-col items-center">
                 <span className="text-lg text-[#888]">Avg Accuracy</span>
-                <span className="text-3xl font-bold text-[#888]">{avgAccuracy}</span>
+                <span className="text-3xl font-bold text-[#888]">{avgAccuracy.toFixed(2)}</span>
               </div>
               <div className="flex flex-col items-center">
                 <span className="text-lg text-[#888]">Avg Error</span>
-                <span className="text-3xl font-bold text-[#888]">{avgError}</span>
+                <span className="text-3xl font-bold text-[#888]">{avgError.toFixed(1)}</span>
               </div>
             </div>
           </div>

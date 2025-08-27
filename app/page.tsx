@@ -9,7 +9,7 @@ export default function Home() {
         <h2 className="text-lg mb-8 text-center text-[#d1d0c5]">1v1 Typing Race - Inspired by Monkeytype</h2>
         <div className="flex flex-col gap-4 items-center">
           <button className="px-6 py-2 rounded font-semibold transition bg-[#e2b714] text-[#171717] hover:bg-[#fff176]">
-            <Link href={"/login"}>Start Race</Link>
+            <Link href={"/login"}>Start Racing</Link>
           </button>
         </div>
         <div className="mt-8 text-center text-sm opacity-70 text-[#d1d0c5]">
